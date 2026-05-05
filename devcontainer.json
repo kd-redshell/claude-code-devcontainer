@@ -45,10 +45,10 @@
     "source=devc-${localWorkspaceFolderBasename}-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
     "source=devc-${localWorkspaceFolderBasename}-config-${devcontainerId},target=/home/vscode/.claude,type=volume",
     "source=devc-${localWorkspaceFolderBasename}-gh-${devcontainerId},target=/home/vscode/.config/gh,type=volume",
-    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,readonly",
+    "source=${localEnv:HOME}/.gitconfig.devc,target=/home/vscode/.gitconfig,type=bind,readonly",
     "source=${localWorkspaceFolder}/.devcontainer,target=/workspace/.devcontainer,type=bind,readonly",
-    "source=${localWorkspaceFolder}/.git/config,target=/workspace/.git/config,type=bind,readonly",
-    "source=${localWorkspaceFolder}/.git/hooks,target=/workspace/.git/hooks,type=bind,readonly"
+    "source=${localWorkspaceFolder}/.git/config.devc,target=/workspace/.git/config,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.git/hooks.devc,target=/workspace/.git/hooks,type=bind,readonly"
   ],
   "containerEnv": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
@@ -69,7 +69,7 @@
     "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN:}",
     "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY:}"
   },
-  "initializeCommand": "test -f \"$HOME/.gitconfig\" || touch \"$HOME/.gitconfig\"",
+  "initializeCommand": "cp -Lf \"$HOME/.gitconfig\" \"$HOME/.gitconfig.devc\" 2>/dev/null || touch \"$HOME/.gitconfig.devc\"; cp -Lf .git/config .git/config.devc 2>/dev/null || touch .git/config.devc; rm -rf .git/hooks.devc && cp -rL .git/hooks .git/hooks.devc 2>/dev/null || mkdir -p .git/hooks.devc",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
   "postCreateCommand": "uv run --no-project /opt/post_install.py"
