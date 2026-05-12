@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   # Utilities
   jq \
   nano \
+  vim \
   unzip \
   vim \
   # Network tools (for security testing)
@@ -63,8 +64,84 @@ RUN mkdir -p /commandhistory /workspace /home/vscode/.claude /opt && \
 # Set environment variables
 ENV DEVCONTAINER=true
 ENV SHELL=/bin/zsh
-ENV EDITOR=nano
-ENV VISUAL=nano
+ENV EDITOR=vim
+ENV VISUAL=vim
+
+################# ANDROID ###########################################
+# ── System packages for Android Java + NDK development ──────────────
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends software-properties-common \
+ && add-apt-repository universe \
+ && apt-get update
+RUN apt-get install -y --no-install-recommends \
+    # Core build tools & JDK
+    build-essential \
+    git \
+    curl \
+    wget \
+    unzip \
+    zip \
+    openjdk-17-jdk \
+    # NDK / native compilation
+    cmake \
+    ninja-build \
+    gcc-multilib \
+    g++-multilib \
+    libc6-dev-i386 \
+    # 32-bit & system libs needed by SDK/NDK toolchains
+    lib32z1 \
+    lib32stdc++6 \
+    libncurses6 \
+    libgl1-mesa-dev \
+    # Emulator dependencies
+    libpulse0 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxi6 \
+    libxtst6 \
+    libnss3 \
+    libxrandr2 \
+    libxdamage1 \
+    libxfixes3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+ && rm -rf /var/lib/apt/lists/*
+
+# ── Environment ──────────────────────────────────────────────────────
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=${ANDROID_HOME}
+ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
+
+# ── Android SDK command-line tools ───────────────────────────────────
+# Check https://developer.android.com/studio#command-line-tools-only for the latest URL
+ARG CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools \
+ && cd ${ANDROID_HOME}/cmdline-tools \
+ && wget -q "${CMDLINE_TOOLS_URL}" -O cmdline-tools.zip \
+ && unzip -q cmdline-tools.zip \
+ && mv cmdline-tools latest \
+ && rm cmdline-tools.zip
+
+# ── Accept licences & install SDK components ─────────────────────────
+# Clean up temp/cache files in the same RUN layer to reduce peak image size
+RUN bash -c 'yes 2>/dev/null | sdkmanager --licenses > /dev/null 2>&1 || true' \
+ && sdkmanager --update \
+ && sdkmanager \
+      "platform-tools" \
+      "build-tools;34.0.0" \
+      "platforms;android-34" \
+      "ndk;27.0.12077973" \
+      "cmake;3.22.1" \
+      "emulator" \
+      "system-images;android-34;google_apis;x86_64" \
+ && rm -rf /tmp/* /var/tmp/*
+################# ANDROID ###########################################
 
 WORKDIR /workspace
 
