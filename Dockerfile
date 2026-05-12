@@ -141,6 +141,12 @@ RUN bash -c 'yes 2>/dev/null | sdkmanager --licenses > /dev/null 2>&1 || true' \
       "emulator" \
       "system-images;android-34;google_apis;x86_64" \
  && rm -rf /tmp/* /var/tmp/*
+
+# avd-vr-emulator skill
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get install -y --no-install-recommends nodejs \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN npm install -g appium
 ################# ANDROID ###########################################
 
 WORKDIR /workspace
@@ -162,6 +168,10 @@ RUN uv python install 3.13 --default
 
 # Install ast-grep (AST-based code search)
 RUN uv tool install ast-grep-cli
+
+# avd-vr-emulator skill
+RUN uv tool install mitmproxy
+RUN uv tool install frida-tools
 
 # Install fnm (Fast Node Manager) and Node 22
 ARG NODE_VERSION=22
