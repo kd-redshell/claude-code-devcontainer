@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Post-install configuration for Claude Code devcontainer.
 
-Runs on container creation to set up:
+Runs on container creation (via postCreateCommand) to set up:
+- Claude Code marketplace plugins
 - Onboarding bypass (when CLAUDE_CODE_OAUTH_TOKEN is set)
 - Claude settings (bypassPermissions mode)
 - Tmux configuration (200k history, mouse support)
 - Directory ownership fixes for mounted volumes
+
+Plugin installation lives here (not in the Dockerfile) because ~/.claude/ is
+mounted as a Docker named volume, which only copies image contents on *first
+creation*. Subsequent Docker rebuilds silently keep the old volume data, so we
+now install plugins after Docker image creation.
 """
 
 import contextlib
@@ -14,6 +20,68 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+
+############################
+# Marketplace plugin list  #
+############################
+# Edit this list to add/remove plugins.  Changes take effect on the next
+# container rebuild (postCreateCommand re-runs) without needing to delete
+# the ~/.claude Docker volume.
+CLAUDE_PLUGINS = [
+    "anthropics/skills",
+    "trailofbits/skills",
+    "trailofbits/skills-curated",
+]
+
+
+def install_claude_plugins():
+    """Install Claude Code marketplace plugins into the live ~/.claude volume.
+
+    Runs `claude plugin marketplace add <name>` for each plugin in
+    CLAUDE_PLUGINS. This is idempotent; re-adding an already-installed
+    plugin is a nop on Claude's side.
+
+    This must happen at container creation time (not in the Dockerfile)
+    because ~/.claude/ is a Docker named volume.  See module docstring
+    for the full explanation.
+    """
+    for plugin in CLAUDE_PLUGINS:
+        print(
+            f"[post_install] Installing Claude plugin: {plugin}",
+            file=sys.stderr,
+        )
+        try:
+            result = subprocess.run(
+                ["claude", "plugin", "marketplace", "add", plugin],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode != 0:
+                print(
+                    f"[post_install] Warning: failed to install plugin {plugin}: "
+                    f"{result.stderr.strip()}",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"[post_install] Installed plugin: {plugin}",
+                    file=sys.stderr,
+                )
+        except subprocess.TimeoutExpired:
+            print(
+                f"[post_install] Warning: timed out installing plugin {plugin}",
+                file=sys.stderr,
+            )
+        except (FileNotFoundError, OSError) as e:
+            # claude binary not found — skip all remaining plugins
+            print(
+                f"[post_install] Warning: could not run claude ({e}) — "
+                "plugin installation skipped",
+                file=sys.stderr,
+            )
+            break
 
 
 def setup_onboarding_bypass():
@@ -295,6 +363,13 @@ node_modules/
 def main():
     """Run all post-install configuration."""
     print("[post_install] Starting post-install configuration...", file=sys.stderr)
+
+    # Plugins first: setup_onboarding_bypass() writes auth state into
+    # ~/.claude.json (which lives on the named volume), and we don't want
+    # plugin installation to depend on, or be disrupted by, that state.
+    # The only prerequisite is the claude binary on PATH (provided by the
+    # COPY --from=claude-install stage in the Dockerfile).
+    install_claude_plugins()
 
     setup_onboarding_bypass()
     setup_claude_settings()
