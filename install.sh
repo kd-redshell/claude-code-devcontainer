@@ -26,24 +26,31 @@ print_usage() {
 Usage: devc <command> [options]
 
 Commands:
-    .                   Install devcontainer template to current directory and start
-    up                  Start the devcontainer in current directory
-    rebuild             Rebuild the devcontainer (preserves auth volumes)
-    down                Stop the devcontainer
-    shell               Open a shell in the running container
-    self-install        Install 'devc' command to ~/.local/bin
-    update              Update devc to the latest version
-    template [dir]      Copy devcontainer template to directory (default: current)
-    exec <cmd>          Execute a command in the running container
-    upgrade             Upgrade Claude Code to latest version
-    mount <host> <cont> Add a mount to the devcontainer (recreates container)
+    . [--target base|android]   Install template + start container (default: base)
+    up                          Start the devcontainer in current directory
+    rebuild                     Rebuild the devcontainer (preserves auth volumes)
+    down                        Stop the devcontainer
+    shell                       Open a shell in the running container
+    self-install                Install 'devc' command to ~/.local/bin
+    update                      Update devc to the latest version
+    template [dir] [--target base|android]
+                                Copy devcontainer template to directory (default: current)
+    exec <cmd>                  Execute a command in the running container
+    upgrade                     Upgrade Claude Code to latest version
+    mount <host> <cont>         Add a mount to the devcontainer (recreates container)
     sync [project] [--trusted]  Sync sessions from devcontainers to host
-    cp <cont> <host>    Copy files/directories from container to host
-    destroy [-f]        Remove container, volumes, and image for current project
-    help                Show this help message
+    cp <cont> <host>            Copy files/directories from container to host
+    destroy [-f]                Remove container, volumes, and image for current project
+    help                        Show this help message
+
+Build profiles:
+    base        General-purpose devcontainer (default)
+    android     Android SDK/NDK, emulator, appium (~8 GB extra)
 
 Examples:
-    devc .                      # Install template and start container
+    devc .                      # Install template and start (base profile)
+    devc . --target android     # Install template and start (android profile)
+    devc template --target android  # Install android template only
     devc up                     # Start container in current directory
     devc rebuild                # Clean rebuild
     devc shell                  # Open interactive shell
@@ -180,11 +187,43 @@ update_devcontainer_mounts() {
 }
 
 cmd_template() {
-  local target_dir="${1:-.}"
+  local target_dir=""
+  local profile="base"
+
+  # Parse positional arg and --target flag
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --target)
+        profile="${2:-}"
+        if [[ -z "$profile" ]]; then
+          log_error "--target requires a value. Available targets: base, android"
+          exit 1
+        fi
+        shift 2
+        ;;
+      *)
+        target_dir="$1"
+        shift
+        ;;
+    esac
+  done
+
+  target_dir="${target_dir:-.}"
   target_dir="$(cd "$target_dir" 2>/dev/null && pwd)" || {
-    log_error "Directory does not exist: $1"
+    log_error "Directory does not exist: $target_dir"
     exit 1
   }
+
+  # Validate profile
+  local valid_profiles=("base" "android")
+  local valid=false
+  for p in "${valid_profiles[@]}"; do
+    [[ "$p" == "$profile" ]] && valid=true
+  done
+  if [[ "$valid" != "true" ]]; then
+    log_error "Unknown target '$profile'. Available targets: ${valid_profiles[*]}"
+    exit 1
+  fi
 
   local devcontainer_dir="$target_dir/.devcontainer"
   local devcontainer_json="$devcontainer_dir/devcontainer.json"
@@ -208,11 +247,30 @@ cmd_template() {
 
   mkdir -p "$devcontainer_dir"
 
-  # Copy template files
+  # Copy all template files (base Dockerfile + all profile Dockerfiles)
   cp "$SCRIPT_DIR/Dockerfile" "$devcontainer_dir/"
+  cp "$SCRIPT_DIR/Dockerfile."* "$devcontainer_dir/" 2>/dev/null || true
   cp "$SCRIPT_DIR/devcontainer.json" "$devcontainer_dir/"
   cp "$SCRIPT_DIR/post_install.py" "$devcontainer_dir/"
   cp "$SCRIPT_DIR/.zshrc" "$devcontainer_dir/"
+
+  # Configure devcontainer.json for the selected profile
+  if [[ "$profile" != "base" ]]; then
+    local updated
+    # Point to profile-specific Dockerfile
+    updated=$(jq --arg df "Dockerfile.${profile}" '.build.dockerfile = $df' "$devcontainer_json")
+    printf '%s\n' "$updated" > "$devcontainer_json"
+    # Set profile-specific build args
+    updated=$(jq '.build.args = { "BASE_IMAGE": "claude-devcontainer-base:latest" }' "$devcontainer_json")
+    printf '%s\n' "$updated" > "$devcontainer_json"
+  fi
+
+  # Android-specific: add KVM device access for emulator
+  if [[ "$profile" == "android" ]]; then
+    local updated
+    updated=$(jq '.runArgs += ["--device=/dev/kvm"]' "$devcontainer_json")
+    printf '%s\n' "$updated" > "$devcontainer_json"
+  fi
 
   # Restore preserved mounts
   if [[ -n "$preserved_mounts" ]]; then
@@ -221,7 +279,27 @@ cmd_template() {
     log_info "Custom mounts restored"
   fi
 
-  log_success "Template installed to $devcontainer_dir"
+  log_success "Template installed to $devcontainer_dir (profile: $profile)"
+}
+
+maybe_build_base() {
+  local workspace_folder="$1"
+  local devcontainer_dir="$workspace_folder/.devcontainer"
+  local devcontainer_json="$devcontainer_dir/devcontainer.json"
+
+  local dockerfile
+  dockerfile=$(jq -r '.build.dockerfile' "$devcontainer_json")
+
+  # Profile Dockerfiles (anything other than "Dockerfile") depend on the
+  # base image being pre-built and tagged.
+  if [[ "$dockerfile" != "Dockerfile" ]]; then
+    log_info "Building base image (claude-devcontainer-base:latest)..."
+    docker build \
+      -f "$devcontainer_dir/Dockerfile" \
+      --build-arg "TZ=${TZ:-UTC}" \
+      -t claude-devcontainer-base:latest \
+      "$devcontainer_dir"
+  fi
 }
 
 cmd_up() {
@@ -230,6 +308,7 @@ cmd_up() {
 
   check_devcontainer_cli
   check_no_sys_admin "$workspace_folder"
+  maybe_build_base "$workspace_folder"
   log_info "Starting devcontainer in $workspace_folder..."
 
   devcontainer up --workspace-folder "$workspace_folder"
@@ -242,6 +321,7 @@ cmd_rebuild() {
 
   check_devcontainer_cli
   check_no_sys_admin "$workspace_folder"
+  maybe_build_base "$workspace_folder"
   log_info "Rebuilding devcontainer in $workspace_folder..."
 
   devcontainer up --workspace-folder "$workspace_folder" --remove-existing-container
@@ -638,7 +718,7 @@ cmd_update() {
 
 cmd_dot() {
   # Install template and start container in one command
-  cmd_template "."
+  cmd_template "." "$@"
   cmd_up "."
 }
 
@@ -803,7 +883,7 @@ main() {
 
   case "$command" in
   .)
-    cmd_dot
+    cmd_dot "$@"
     ;;
   up)
     cmd_up "$@"

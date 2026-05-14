@@ -59,6 +59,23 @@ Verify with `colima status` - should show "macOS Virtualization.Framework" and "
 
 </details>
 
+## Build Profiles
+
+Two build profiles are available:
+
+| Profile | Use Case | Extra Size |
+|---------|----------|------------|
+| `base` (default) | General development, security audits | -- |
+| `android` | Android SDK/NDK, emulator, appium | ~8 GB |
+
+```bash
+devc .                      # Install template + start (base profile)
+devc . --target android     # Install template + start (android profile)
+devc template --target android  # Install android template only
+```
+
+To switch an existing container's profile, edit `build.dockerfile` in `.devcontainer/devcontainer.json` (e.g., change `"Dockerfile"` to `"Dockerfile.android"`), then run `devc rebuild`.
+
 ## Quick Start
 
 Choose the pattern that fits your workflow:
@@ -72,7 +89,7 @@ Each project gets its own container with independent volumes. Best for one-off r
 ```bash
 git clone <untrusted-repo>
 cd untrusted-repo
-devc .          # Installs template + starts container
+devc .          # Installs template + starts container (base profile)
 devc shell      # Opens shell in container
 ```
 
@@ -133,7 +150,7 @@ If you don't set a token, the interactive login flow works as before.
 ## CLI Helper Commands
 
 ```
-devc .              Install template + start container in current directory
+devc . [--target base|android]  Install template + start container (default: base)
 devc up             Start the devcontainer
 devc rebuild        Rebuild container (preserves persistent volumes)
 devc destroy [-f]   Remove container, volumes, and image for current project
@@ -143,7 +160,8 @@ devc exec CMD       Execute command inside the container
 devc upgrade        Upgrade Claude Code in the container
 devc mount SRC DST  Add a bind mount (host → container)
 devc sync [NAME]    Sync Claude Code sessions from devcontainers to host
-devc template DIR   Copy devcontainer files to directory
+devc template [DIR] [--target base|android]
+                    Copy devcontainer files to directory
 devc self-install   Install devc to ~/.local/bin
 ```
 
@@ -237,6 +255,7 @@ The container auto-configures `bypassPermissions` mode—Claude runs commands wi
 | Base | Ubuntu 24.04, Node.js 22, Python 3.13 + uv, zsh |
 | User | `vscode` (passwordless sudo), working dir `/workspace` |
 | Tools | `rg`, `fd`, `tmux`, `fzf`, `delta`, `iptables`, `ipset` |
+| Android profile adds | JDK 17, Android SDK/NDK, emulator, appium, mitmproxy, frida |
 | Volumes (survive rebuilds) | Command history (`/commandhistory`), Claude config (`~/.claude`), GitHub CLI auth (`~/.config/gh`) |
 | Host mounts | `~/.gitconfig` (read-only), `.devcontainer/` (read-only) |
 | Auto-configured | [anthropics](https://github.com/anthropics/claude-code-plugins) + [trailofbits](https://github.com/trailofbits/claude-code-plugins) skills, git-delta |
@@ -280,7 +299,12 @@ uv run --with requests py.py  # Ad-hoc dependency
 Build the image manually:
 
 ```bash
+# Base profile
 devcontainer build --workspace-folder .
+
+# Android profile (requires base image to be built first)
+docker build -t claude-devcontainer-base:latest -f .devcontainer/Dockerfile .devcontainer/
+devcontainer build --workspace-folder .   # with devcontainer.json pointing to Dockerfile.android
 ```
 
 Test the container:
@@ -289,3 +313,37 @@ Test the container:
 devcontainer up --workspace-folder .
 devcontainer exec --workspace-folder . zsh
 ```
+
+## Adding a New Profile
+
+To create a new build profile (e.g., `reveng` for reverse engineering):
+
+1. **Create `Dockerfile.<name>`** in the repo root. It must extend the base image:
+
+   ```dockerfile
+   ARG BASE_IMAGE=claude-devcontainer-base:latest
+   FROM ${BASE_IMAGE}
+
+   USER root
+   # Install profile-specific system packages
+   RUN apt-get update && apt-get install -y --no-install-recommends \
+       ghidra \
+       radare2 \
+     && rm -rf /var/lib/apt/lists/*
+
+   USER vscode
+   # Install profile-specific user tools
+   RUN uv tool install pwntools
+   ```
+
+2. **Register the profile** in `install.sh` — add the name to the `valid_profiles` array in `cmd_template()`:
+
+   ```bash
+   local valid_profiles=("base" "android" "reveng")
+   ```
+
+   If the profile needs extra `runArgs` or `containerEnv` entries (like Android needs `--device=/dev/kvm`), add a conditional block after the Android one.
+
+3. **Update docs** — add the profile to the table in the "Build Profiles" section of this README and in CLAUDE.md.
+
+That's it. `devc template` copies all `Dockerfile.*` files automatically, and `maybe_build_base` handles the two-step build for any non-base profile.

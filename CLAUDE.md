@@ -10,6 +10,8 @@ A sandboxed devcontainer for running Claude Code with `bypassPermissions` safely
 
 ```bash
 # Build the container image (from host)
+devc .                        # install template + start (base profile)
+devc . --target android       # install template + start (android profile)
 devc up                       # start devcontainer
 devc rebuild                  # rebuild preserving volumes
 devc destroy                  # tear down all resources (containers, volumes, images)
@@ -18,19 +20,35 @@ devc destroy                  # tear down all resources (containers, volumes, im
 uv run --no-project /opt/post_install.py   # re-run post-install setup
 
 # Docker image build (standalone, no devcontainer CLI)
-docker build -t claude-devcontainer .
+docker build -t claude-devcontainer .                               # base
+docker build -t claude-devcontainer-base:latest . && \
+  docker build -f Dockerfile.android -t claude-devcontainer-android .  # android
 ```
 
 There is no test suite or linter configuration. This is a configuration/tooling project.
 
 ## Architecture
 
-Three files define the entire system:
+### Build Profiles
 
-### Dockerfile (multi-stage build)
+The project supports multiple build profiles via separate Dockerfiles:
+
+| Profile | Dockerfile | Use Case | Extra Size |
+|---------|------------|----------|------------|
+| `base` (default) | `Dockerfile` | General development, security audits | -- |
+| `android` | `Dockerfile.android` | Android SDK/NDK, emulator, appium | ~8 GB |
+
+Profile Dockerfiles extend the base image (`FROM claude-devcontainer-base:latest`). When building a non-base profile, `install.sh` automatically pre-builds and tags the base image first.
+
+Select a profile with `devc . --target android` or `devc template --target android`. The default is `base`.
+
+### Dockerfile (base image, multi-stage build)
 1. **`uv` stage** -- copies the uv binary from Astral's image.
-2. **`claude-install` stage** -- downloads the Claude Code binary in isolation. This stage exists so the ~8 GB Android SDK layers aren't in memory during the download (fixes OOM during `docker buildx`). The binary is staged at `/tmp/claude-stage/claude` via `cp -L` to dereference the symlink.
-3. **Final stage** -- Ubuntu 24.04 devcontainer base with system packages, Android SDK/NDK, Python 3.13, Node.js 22, and CLI tools. The Claude binary is copied in via `COPY --from=claude-install`.
+2. **`claude-install` stage** -- downloads the Claude Code binary in isolation. This stage exists to avoid OOM during `docker buildx` when heavy layers are in memory. The binary is staged at `/tmp/claude-stage/claude` via `cp -L` to dereference the symlink.
+3. **Final stage** -- Ubuntu 24.04 devcontainer base with system packages, Python 3.13, Node.js 22, and CLI tools. The Claude binary is copied in via `COPY --from=claude-install`.
+
+### Dockerfile.android (profile)
+Extends the base image with Android SDK/NDK, emulator system images, JDK 17, appium, mitmproxy, and frida-tools.
 
 ### post_install.py (container creation hook)
 Runs via `postCreateCommand` after the container starts. Execution order matters:
