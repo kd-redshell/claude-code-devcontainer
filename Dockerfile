@@ -1,13 +1,16 @@
-# Claude Code Devcontainer
+# Claude Code Devcontainer — Base Image
 # Based on Microsoft devcontainer image for better devcontainer integration
 #
 # Multi-stage build layout:
 #   1. "uv"            — grab the uv binary from Astral's official image
 #   2. "claude-install" — install the Claude Code binary in a lightweight
-#                         stage so the ~8 GB Android SDK is NOT in memory
-#                         during the download (fixes OOM during buildx)
-#   3. final stage      — everything else; copies the Claude binary in
-#                         via COPY --from instead of running the installer
+#                         stage so profile images don't OOM during buildx
+#   3. final stage      — general-purpose devcontainer; copies the Claude
+#                         binary in via COPY --from
+#
+# Profile Dockerfiles (Dockerfile.android, etc.) extend this base image.
+# Build this first and tag it before building any profile:
+#   docker build -t claude-devcontainer-base:latest -f Dockerfile .
 
 # ---------------------------------------------------------------------------
 # Stage: uv binary
@@ -17,8 +20,8 @@ FROM ghcr.io/astral-sh/uv:0.10@sha256:10902f58a1606787602f303954cea099626a4adb02
 # ---------------------------------------------------------------------------
 # Stage: Claude Code installer
 # ---------------------------------------------------------------------------
-# Runs in its own stage so BuildKit never has the Android SDK layers loaded
-# when this process allocates memory.  Only the resulting binary (~240 MB at
+# Runs in its own stage so BuildKit doesn't have heavy layers loaded when
+# this process allocates memory.  Only the resulting binary (~240 MB at
 # ~/.local/bin/claude) is carried forward via COPY --from.
 #
 # NOTE: plugins are NOT installed here — they live under ~/.claude/plugins/,
@@ -45,7 +48,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
  && cp -L /home/vscode/.local/bin/claude /tmp/claude-stage/claude
 
 # ---------------------------------------------------------------------------
-# Final stage: main image
+# Final stage: base image
 # ---------------------------------------------------------------------------
 FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04@sha256:4bcb1b466771b1ba1ea110e2a27daea2f6093f9527fb75ee59703ec89b5561cb
 
@@ -71,7 +74,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   nano \
   vim \
   unzip \
-  vim \
+  zip \
   # Network tools (for security testing)
   dnsutils \
   ipset \
@@ -113,88 +116,6 @@ ENV SHELL=/bin/zsh
 ENV EDITOR=vim
 ENV VISUAL=vim
 
-################# ANDROID ###########################################
-# ── System packages for Android Java + NDK development ──────────────
-RUN apt-get update \
- && apt-get install -y --no-install-recommends software-properties-common \
- && add-apt-repository universe \
- && apt-get update
-RUN apt-get install -y --no-install-recommends \
-    # Core build tools & JDK
-    build-essential \
-    git \
-    curl \
-    wget \
-    unzip \
-    zip \
-    openjdk-17-jdk \
-    # NDK / native compilation
-    cmake \
-    ninja-build \
-    gcc-multilib \
-    g++-multilib \
-    libc6-dev-i386 \
-    # 32-bit & system libs needed by SDK/NDK toolchains
-    lib32z1 \
-    lib32stdc++6 \
-    libncurses6 \
-    libgl1-mesa-dev \
-    # Emulator dependencies
-    libpulse0 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxi6 \
-    libxtst6 \
-    libnss3 \
-    libxrandr2 \
-    libxdamage1 \
-    libxfixes3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
- && rm -rf /var/lib/apt/lists/*
-
-# ── Environment ──────────────────────────────────────────────────────
-ENV ANDROID_HOME=/opt/android-sdk
-ENV ANDROID_SDK_ROOT=${ANDROID_HOME}
-ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator:${PATH}"
-
-# ── Android SDK command-line tools ───────────────────────────────────
-# Check https://developer.android.com/studio#command-line-tools-only for the latest URL
-ARG CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-
-RUN mkdir -p ${ANDROID_HOME}/cmdline-tools \
- && cd ${ANDROID_HOME}/cmdline-tools \
- && wget -q "${CMDLINE_TOOLS_URL}" -O cmdline-tools.zip \
- && unzip -q cmdline-tools.zip \
- && mv cmdline-tools latest \
- && rm cmdline-tools.zip
-
-# ── Accept licences & install SDK components ─────────────────────────
-# Clean up temp/cache files in the same RUN layer to reduce peak image size
-RUN bash -c 'yes 2>/dev/null | sdkmanager --licenses > /dev/null 2>&1 || true' \
- && sdkmanager --update \
- && sdkmanager \
-      "platform-tools" \
-      "build-tools;34.0.0" \
-      "platforms;android-34" \
-      "ndk;27.0.12077973" \
-      "cmake;3.22.1" \
-      "emulator" \
-      "system-images;android-34;google_apis;x86_64" \
- && rm -rf /tmp/* /var/tmp/*
-
-# avd-vr-emulator skill
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-  && apt-get install -y --no-install-recommends nodejs \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
-RUN npm install -g appium
-################# ANDROID ###########################################
-
 WORKDIR /workspace
 
 # Switch to non-root user for remaining setup
@@ -218,10 +139,6 @@ RUN uv python install 3.13 --default
 
 # Install ast-grep (AST-based code search)
 RUN uv tool install ast-grep-cli
-
-# avd-vr-emulator skill
-RUN uv tool install mitmproxy
-RUN uv tool install frida-tools
 
 # Install fnm (Fast Node Manager) and Node 22
 ARG NODE_VERSION=22
