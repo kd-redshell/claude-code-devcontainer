@@ -77,6 +77,22 @@ devc template --target android  # Install android template only
 
 To switch an existing container's profile, edit `build.dockerfile` in `.devcontainer/devcontainer.json` (e.g., change `"Dockerfile"` to `"Dockerfile.android"`), then run `devc rebuild`.
 
+## Configuration
+
+Build settings are defined in `.devcontainer/env`, created by `devc template` with sensible defaults:
+
+```
+NODE_VERSION=22
+
+ANDROID_API=34
+ANDROID_BUILD_TOOLS=34.0.0
+ANDROID_NDK=27.0.12077973
+```
+
+Edit this file and run `devc rebuild` to apply changes. The file is preserved across `devc template` updates, so your customizations persist.
+
+The Android system image architecture (`x86_64` / `arm64-v8a`) is auto-detected from the host at build time. To override, add `ANDROID_ARCH=arm64-v8a` to the env file.
+
 ## Quick Start
 
 Choose the pattern that fits your workflow:

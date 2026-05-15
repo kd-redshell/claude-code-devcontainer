@@ -186,6 +186,16 @@ update_devcontainer_mounts() {
   echo "$updated" >"$devcontainer_json"
 }
 
+read_env_file() {
+  local env_file="$1"
+  [[ -f "$env_file" ]] || return 0
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    echo "$line"
+  done < "$env_file"
+}
+
 cmd_template() {
   local target_dir=""
   local profile="base"
@@ -254,6 +264,11 @@ cmd_template() {
   cp "$SCRIPT_DIR/post_install.py" "$devcontainer_dir/"
   cp "$SCRIPT_DIR/.zshrc" "$devcontainer_dir/"
 
+  # Copy env file (preserve user customizations if already present)
+  if [[ ! -f "$devcontainer_dir/env" ]]; then
+    cp "$SCRIPT_DIR/env" "$devcontainer_dir/"
+  fi
+
   # Configure devcontainer.json for the selected profile
   if [[ "$profile" != "base" ]]; then
     local updated
@@ -270,6 +285,26 @@ cmd_template() {
     local updated
     updated=$(jq '.runArgs += ["--device=/dev/kvm"]' "$devcontainer_json")
     printf '%s\n' "$updated" > "$devcontainer_json"
+  fi
+
+  # Inject build args from env file into devcontainer.json
+  local env_file="$devcontainer_dir/env"
+  if [[ -f "$env_file" ]]; then
+    local args="{}"
+    while IFS='=' read -r key value; do
+      case "$key" in
+        NODE_VERSION) [[ "$profile" != "base" ]] && continue ;;
+        ANDROID_*) [[ "$profile" == "base" ]] && continue ;;
+        *) continue ;;
+      esac
+      args=$(echo "$args" | jq --arg k "$key" --arg v "$value" '. + {($k): $v}')
+    done < <(read_env_file "$env_file")
+
+    if [[ "$args" != "{}" ]]; then
+      local updated
+      updated=$(jq --argjson new_args "$args" '.build.args += $new_args' "$devcontainer_json")
+      printf '%s\n' "$updated" > "$devcontainer_json"
+    fi
   fi
 
   # Restore preserved mounts
@@ -294,9 +329,18 @@ maybe_build_base() {
   # base image being pre-built and tagged.
   if [[ "$dockerfile" != "Dockerfile" ]]; then
     log_info "Building base image (claude-devcontainer-base:latest)..."
+
+    local build_args=(--build-arg "TZ=${TZ:-UTC}")
+    local env_file="$devcontainer_dir/env"
+    while IFS='=' read -r key value; do
+      case "$key" in
+        NODE_VERSION) build_args+=(--build-arg "$key=$value") ;;
+      esac
+    done < <(read_env_file "$env_file")
+
     docker build \
       -f "$devcontainer_dir/Dockerfile" \
-      --build-arg "TZ=${TZ:-UTC}" \
+      "${build_args[@]}" \
       -t claude-devcontainer-base:latest \
       "$devcontainer_dir"
   fi

@@ -11,6 +11,11 @@
 ARG BASE_IMAGE=claude-devcontainer-base:latest
 FROM ${BASE_IMAGE}
 
+# Configurable SDK versions — override via .devcontainer/env
+ARG ANDROID_API=34
+ARG ANDROID_BUILD_TOOLS=34.0.0
+ARG ANDROID_NDK=27.0.12077973
+
 USER root
 
 # ── System packages for Android Java + NDK development ──────────────
@@ -76,16 +81,18 @@ RUN mkdir -p ${ANDROID_HOME}/cmdline-tools \
 # starting the next download — keeps peak memory below the OOM threshold.
 RUN bash -c 'yes 2>/dev/null | sdkmanager --licenses > /dev/null 2>&1 || true' \
  && sdkmanager --update \
- && sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34" "cmake;3.22.1" \
+ && sdkmanager "platform-tools" "build-tools;${ANDROID_BUILD_TOOLS}" "platforms;android-${ANDROID_API}" "cmake;3.22.1" \
  && rm -rf /tmp/* /var/tmp/*
 
-RUN sdkmanager "ndk;27.0.12077973" \
+RUN sdkmanager "ndk;${ANDROID_NDK}" \
  && rm -rf /tmp/* /var/tmp/*
 
 RUN sdkmanager "emulator" \
  && rm -rf /tmp/* /var/tmp/*
 
-RUN sdkmanager "system-images;android-34;google_apis;x86_64" \
+RUN ARCH=$(dpkg --print-architecture) \
+ && if [ "$ARCH" = "arm64" ]; then SYS_ARCH="arm64-v8a"; else SYS_ARCH="x86_64"; fi \
+ && sdkmanager "system-images;android-${ANDROID_API};google_apis;${SYS_ARCH}" \
  && rm -rf /tmp/* /var/tmp/*
 
 # ── User-level tools ────────────────────────────────────────────────
