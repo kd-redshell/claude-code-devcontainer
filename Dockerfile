@@ -1,12 +1,9 @@
 # Claude Code Devcontainer — Base Image
 # Based on Microsoft devcontainer image for better devcontainer integration
 #
-# Multi-stage build layout:
-#   1. "uv"            — grab the uv binary from Astral's official image
-#   2. "claude-install" — install the Claude Code binary in a lightweight
-#                         stage so profile images don't OOM during buildx
-#   3. final stage      — general-purpose devcontainer; copies the Claude
-#                         binary in via COPY --from
+# Build layout:
+#   1. "uv"        — grab the uv binary from Astral's official image
+#   2. final stage — general-purpose devcontainer
 #
 # Profile Dockerfiles (Dockerfile.android, etc.) extend this base image.
 # Build this first and tag it before building any profile:
@@ -16,36 +13,6 @@
 # Stage: uv binary
 # ---------------------------------------------------------------------------
 FROM ghcr.io/astral-sh/uv:0.10@sha256:10902f58a1606787602f303954cea099626a4adb02acbac4c69920fe9d278f82 AS uv
-
-# ---------------------------------------------------------------------------
-# Stage: Claude Code installer
-# ---------------------------------------------------------------------------
-# Runs in its own stage so BuildKit doesn't have heavy layers loaded when
-# this process allocates memory.  Only the resulting binary (~240 MB at
-# ~/.local/bin/claude) is carried forward via COPY --from.
-#
-# NOTE: plugins are NOT installed here — they live under ~/.claude/plugins/,
-# which is mounted as a Docker named volume at runtime.  Named volumes only
-# copy image contents on first creation, so plugin changes in the Dockerfile
-# would silently be ignored on rebuilds.  Instead, plugins are installed in
-# postCreateCommand (post_install.py) where they always run against the live
-# volume.
-# ---------------------------------------------------------------------------
-FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04@sha256:4bcb1b466771b1ba1ea110e2a27daea2f6093f9527fb75ee59703ec89b5561cb AS claude-install
-
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-USER vscode
-ENV PATH="/home/vscode/.local/bin:$PATH"
-
-# Download and run the native installer, then stage the resolved binary at a
-# known location for COPY --from.  The installer places a *symlink* at
-# ~/.local/bin/claude pointing into ~/.claude/, which is a Docker named
-# volume in the final container — COPY would preserve the symlink and it
-# would dangle.  cp -L dereferences it so we carry the real binary forward.
-RUN curl -fsSL https://claude.ai/install.sh | bash \
- && mkdir -p /tmp/claude-stage \
- && cp -L /home/vscode/.local/bin/claude /tmp/claude-stage/claude
 
 # ---------------------------------------------------------------------------
 # Final stage: base image
@@ -124,15 +91,15 @@ USER vscode
 # Set PATH early so claude and other user-installed binaries are available
 ENV PATH="/home/vscode/.local/bin:$PATH"
 
-# ---------------------------------------------------------------------------
-# Copy the Claude Code binary from the isolated builder stage.
-# Placed in ~/.local/bin/ which is on PATH (not under ~/.claude/ which is
-# a Docker named volume and would shadow build-time files).
+# Install Claude Code binary.
+# The installer places a symlink at ~/.local/bin/claude pointing into
+# ~/.claude/, which is a Docker named volume at runtime and would dangle.
+# Dereference the symlink in-place so we keep the real binary on PATH.
 # Plugins are installed at container creation time by postCreateCommand
 # (see post_install.py) so they always reflect the current config.
-# ---------------------------------------------------------------------------
-COPY --from=claude-install --chown=vscode:vscode \
-  /tmp/claude-stage/claude /home/vscode/.local/bin/claude
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+ && cp -L ~/.local/bin/claude /tmp/claude-real \
+ && mv /tmp/claude-real ~/.local/bin/claude
 
 # Install Python 3.13 via uv (fast binary download, not source compilation)
 RUN uv python install 3.13 --default
