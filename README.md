@@ -16,9 +16,10 @@ Running Claude with `bypassPermissions` on your host machine is risky—it can e
 ## Prerequisites
 
 - **Docker runtime** (one of):
-  - [Docker Desktop](https://docker.com/products/docker-desktop) - ensure it's running
-  - [OrbStack](https://orbstack.dev/)
-  - [Colima](https://github.com/abiosoft/colima): `brew install colima docker && colima start`
+  - [Docker Engine](https://docs.docker.com/engine/install/) (Linux) - native, no VM overhead needed
+  - [Docker Desktop](https://docker.com/products/docker-desktop) (macOS/Windows/Linux)
+  - [OrbStack](https://orbstack.dev/) (macOS)
+  - [Colima](https://github.com/abiosoft/colima) (macOS/Linux): `brew install colima docker && colima start`
 
 - **For terminal workflows** (one-time install):
 
