@@ -1,0 +1,9 @@
+# Build configuration — edit and run `devc rebuild` to apply.
+
+# Node.js major version (base image)
+NODE_VERSION=22
+
+# Android SDK (android profile only)
+ANDROID_API=34
+ANDROID_BUILD_TOOLS=34.0.0
+ANDROID_NDK=27.0.12077973
