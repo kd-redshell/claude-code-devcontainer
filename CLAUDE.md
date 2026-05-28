@@ -44,8 +44,7 @@ Select a profile with `devc . --target android` or `devc template --target andro
 
 ### Dockerfile (base image, multi-stage build)
 1. **`uv` stage** -- copies the uv binary from Astral's image.
-2. **`claude-install` stage** -- downloads the Claude Code binary in isolation. This stage exists to avoid OOM during `docker buildx` when heavy layers are in memory. The binary is staged at `/tmp/claude-stage/claude` via `cp -L` to dereference the symlink.
-3. **Final stage** -- Ubuntu 24.04 devcontainer base with system packages, Python 3.13, Node.js 22, and CLI tools. The Claude binary is copied in via `COPY --from=claude-install`.
+2. **Final stage** -- Ubuntu 24.04 devcontainer base with system packages, Python 3.13, Node.js (via fnm), and CLI tools. The Claude Code binary is installed via `curl … | bash`, with the symlink dereferenced in-place so the binary survives the `~/.claude/` named volume mount at runtime.
 
 ### Dockerfile.android (profile)
 Extends the base image with Android SDK/NDK, emulator system images, JDK 17, appium, mitmproxy, and frida-tools.
@@ -60,7 +59,7 @@ Runs via `postCreateCommand` after the container starts. Execution order matters
 6. **Git config** -- global gitignore, git-delta pager integration.
 
 ### install.sh (host-side CLI, `devc` command)
-859-line bash script providing 15 subcommands for container lifecycle management. Notable behaviors:
+Bash script providing 15 subcommands for container lifecycle management. Notable behaviors:
 - `devc mount` preserves custom mounts across `devc .` (template reinstall) by extracting and re-merging them into devcontainer.json.
 - `devc sync` copies `.claude/projects/` session data from devcontainers to the host for `/insights` integration.
 - `devc destroy` discovers all associated Docker resources (containers, volumes, images) by label before removal.
@@ -75,9 +74,16 @@ Runs via `postCreateCommand` after the container starts. Execution order matters
 
 Other named volumes: `/commandhistory` (shell history), `~/.config/gh` (GitHub CLI auth).
 
+## Configuration Files
+
+Two user-facing config files live under `.devcontainer/`, both surfaced inside the container via the existing read-only `.devcontainer/` bind mount:
+
+- **`env`** (build-time) -- key=value pairs consumed as Docker build args. `install.sh:cmd_template` whitelists `NODE_VERSION` (base image) and `ANDROID_*` (android profile) and injects them into `devcontainer.json` `build.args` (for the profile build) or passes them to `docker build` in `maybe_build_base` (for the base image build). Edit + `devc rebuild` to apply. Shipped as a template with sensible defaults.
+- **`runtime.env`** (runtime) -- key=value pairs sourced into every interactive zsh session via `.zshrc` using `set -a` / `source` / `set +a`. Edit + open a new shell to apply; no rebuild needed. Created empty (by `install.sh:cmd_template` for new installs and `initializeCommand` for pre-existing installs) and intended to be `.gitignore`'d since it typically holds secrets. Only interactive zsh shells pick it up — not `devc exec <cmd>` or non-zsh sessions.
+
 ## Security-Relevant Mount Setup
 
-`devcontainer.json` runs `initializeCommand` on the host before container start to create sanitized copies of git config and hooks (`.git/config.devc`, `.git/hooks.devc/`, `~/.gitconfig.devc`). These are bind-mounted read-only into the container, preventing the container from modifying the host's git configuration. This is a mitigation for container escape via git hooks.
+`devcontainer.json` runs `initializeCommand` on the host before container start to create sanitized copies of git config and hooks (`.git/config.devc`, `.git/hooks.devc/`, `~/.gitconfig.devc`). These are bind-mounted read-only into the container, preventing the container from modifying the host's git configuration. This is a mitigation for container escape via git hooks. `initializeCommand` also `touch`es `.devcontainer/runtime.env` so the file always exists before container start, even on installs predating that feature.
 
 ## Modifying Plugins
 
