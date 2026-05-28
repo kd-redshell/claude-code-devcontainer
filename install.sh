@@ -269,6 +269,10 @@ cmd_template() {
     cp "$SCRIPT_DIR/env" "$devcontainer_dir/"
   fi
 
+  # Ensure runtime env file exists so the bind mount works.
+  # User-managed; not shipped as a template (would commit secrets).
+  touch "$devcontainer_dir/runtime.env"
+
   # Configure devcontainer.json for the selected profile
   if [[ "$profile" != "base" ]]; then
     local updated

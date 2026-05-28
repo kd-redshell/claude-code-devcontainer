@@ -70,7 +70,7 @@
     "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN:}",
     "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY:}"
   },
-  "initializeCommand": "mkdir -p .git; cp -Lf \"$HOME/.gitconfig\" \"$HOME/.gitconfig.devc\" 2>/dev/null || touch \"$HOME/.gitconfig.devc\"; cp -Lf .git/config .git/config.devc 2>/dev/null || touch .git/config.devc; rm -rf .git/hooks.devc && cp -rL .git/hooks .git/hooks.devc 2>/dev/null || mkdir -p .git/hooks.devc",
+  "initializeCommand": "mkdir -p .git; touch .devcontainer/runtime.env; cp -Lf \"$HOME/.gitconfig\" \"$HOME/.gitconfig.devc\" 2>/dev/null || touch \"$HOME/.gitconfig.devc\"; cp -Lf .git/config .git/config.devc 2>/dev/null || touch .git/config.devc; rm -rf .git/hooks.devc && cp -rL .git/hooks .git/hooks.devc 2>/dev/null || mkdir -p .git/hooks.devc",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
   "postCreateCommand": "uv run --no-project /opt/post_install.py"

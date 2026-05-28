@@ -54,3 +54,11 @@ _fzf_compgen_dir() {
 
 # Source fzf shell integration (built-in since fzf 0.48+)
 eval "$(fzf --zsh)"
+
+# Runtime environment variables — edited by the user, not rebuilt.
+# Lives in the read-only .devcontainer bind mount.
+if [[ -f /workspace/.devcontainer/runtime.env ]]; then
+  set -a
+  source /workspace/.devcontainer/runtime.env
+  set +a
+fi

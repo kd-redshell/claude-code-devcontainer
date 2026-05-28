@@ -93,6 +93,17 @@ Edit this file and run `devc rebuild` to apply changes. The file is preserved ac
 
 The Android system image architecture (`x86_64` / `arm64-v8a`) is auto-detected from the host at build time. To override, add `ANDROID_ARCH=arm64-v8a` to the env file.
 
+### Runtime environment variables
+
+For values you want available inside the container without rebuilding (API keys, per-project flags, etc.), edit `.devcontainer/runtime.env`:
+
+```
+OPENAI_API_KEY=sk-...
+MY_PROJECT_FLAG=1
+```
+
+The file is created empty by `devc template` and sourced into every interactive zsh session via `~/.zshrc`. Changes take effect in the next shell — no `devc rebuild` needed. The file is intended to be `.gitignore`'d since it usually holds secrets; it is not shipped as a template.
+
 ## Quick Start
 
 Choose the pattern that fits your workflow:
