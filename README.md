@@ -184,6 +184,7 @@ devc rebuild        Rebuild container (preserves persistent volumes)
 devc destroy [-f]   Remove container, volumes, and image for current project
 devc down           Stop the container
 devc shell          Open zsh shell in container
+devc list           List all devcontainers (running and stopped)
 devc exec CMD       Execute command inside the container
 devc upgrade        Upgrade Claude Code in the container
 devc mount SRC DST  Add a bind mount (host → container)

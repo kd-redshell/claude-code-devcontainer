@@ -31,6 +31,7 @@ Commands:
     rebuild                     Rebuild the devcontainer (preserves auth volumes)
     down                        Stop the devcontainer
     shell                       Open a shell in the running container
+    list                        List all devcontainers (running and stopped)
     self-install                Install 'devc' command to ~/.local/bin
     update                      Update devc to the latest version
     template [dir] [--target base|android]
@@ -54,6 +55,7 @@ Examples:
     devc up                     # Start container in current directory
     devc rebuild                # Clean rebuild
     devc shell                  # Open interactive shell
+    devc list                   # List all devcontainers
     devc self-install           # Install devc to PATH
     devc update                 # Update to latest version
     devc exec ls -la            # Run command in container
@@ -719,6 +721,31 @@ cmd_cp() {
   log_success "Copied $container_path → $host_path"
 }
 
+cmd_list() {
+  local rows
+  rows=$(docker ps -a \
+    --filter "label=devcontainer.local_folder" \
+    --format '{{.ID}}	{{.State}}	{{.Image}}	{{.Label "devcontainer.local_folder"}}' \
+    2>/dev/null || true)
+
+  if [[ -z "$rows" ]]; then
+    log_info "No devcontainers found."
+    return 0
+  fi
+
+  {
+    printf 'NAME\tSTATUS\tCONTAINER\tIMAGE\tFOLDER\n'
+    while IFS=$'\t' read -r cid state image folder; do
+      printf '%s\t%s\t%s\t%s\t%s\n' \
+        "$(basename "$folder")" \
+        "$state" \
+        "${cid:0:12}" \
+        "$image" \
+        "$folder"
+    done <<< "$rows"
+  } | column -t -s $'\t'
+}
+
 cmd_self_install() {
   local install_dir="$HOME/.local/bin"
   local install_path="$install_dir/devc"
@@ -963,6 +990,9 @@ main() {
     ;;
   cp)
     cmd_cp "$@"
+    ;;
+  list)
+    cmd_list
     ;;
   self-install)
     cmd_self_install

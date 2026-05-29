@@ -59,10 +59,11 @@ Runs via `postCreateCommand` after the container starts. Execution order matters
 6. **Git config** -- global gitignore, git-delta pager integration.
 
 ### install.sh (host-side CLI, `devc` command)
-Bash script providing 15 subcommands for container lifecycle management. Notable behaviors:
+Bash script providing 16 subcommands for container lifecycle management. Notable behaviors:
 - `devc mount` preserves custom mounts across `devc .` (template reinstall) by extracting and re-merging them into devcontainer.json.
 - `devc sync` copies `.claude/projects/` session data from devcontainers to the host for `/insights` integration.
 - `devc destroy` discovers all associated Docker resources (containers, volumes, images) by label before removal.
+- `devc list` enumerates all devcontainers (running and stopped) by the `devcontainer.local_folder` label and renders a table of name, status, container ID, image, and host folder.
 
 ## Volume Architecture
 
