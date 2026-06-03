@@ -7,6 +7,7 @@ Runs on container creation (via postCreateCommand) to set up:
 - Claude settings (bypassPermissions mode)
 - Tmux configuration (200k history, mouse support)
 - Directory ownership fixes for mounted volumes
+- Per-project post-install hook (.devcontainer/post-install.local.{py,sh})
 
 Plugin installation lives here (not in the Dockerfile) because ~/.claude/ is
 mounted as a Docker named volume, which only copies image contents on *first
@@ -360,6 +361,66 @@ node_modules/
     )
 
 
+def run_post_install_hook():
+    """Run a per-project post-install hook, if one is present.
+
+    Convention-based: if `.devcontainer/post-install.local.py` or
+    `.devcontainer/post-install.local.sh` exists in the project (surfaced
+    inside the container via the read-only `.devcontainer/` bind mount), run
+    it as the final post-install step. Dispatch is by extension:
+    `.py` via `uv run --no-project`, `.sh` via `bash`.
+
+    This runs last so the hook sees a fully configured environment: claude on
+    PATH, base plugins installed, settings written, and ~/.claude/ set up.
+
+    The hook can read and execute files under `.devcontainer/` but cannot
+    write back (the mount is read-only); persistent state must go elsewhere
+    (~/.claude/, ~/.config/, etc.).
+
+    Failures are non-fatal: a non-zero exit or a missing interpreter logs a
+    warning and returns, so postCreateCommand still succeeds.
+    """
+    hook_py = Path("/workspace/.devcontainer/post-install.local.py")
+    hook_sh = Path("/workspace/.devcontainer/post-install.local.sh")
+
+    if hook_py.exists() and hook_sh.exists():
+        print(
+            "[post_install] Warning: both post-install.local.py and "
+            "post-install.local.sh exist; refusing to run either. Pick one.",
+            file=sys.stderr,
+        )
+        return
+    elif hook_py.exists():
+        cmd = ["uv", "run", "--no-project", str(hook_py)]
+        hook = hook_py
+    elif hook_sh.exists():
+        cmd = ["bash", str(hook_sh)]
+        hook = hook_sh
+    else:
+        print("[post_install] No local hook found, skipping.", file=sys.stderr)
+        return
+
+    print(f"[post_install] Running local hook: {hook}", file=sys.stderr)
+    try:
+        # Inherit stdout/stderr (do not capture) so the user sees progress
+        # live in the postCreate log. No timeout: hooks may be long-running.
+        result = subprocess.run(cmd, check=False)
+    except (FileNotFoundError, OSError) as e:
+        print(
+            f"[post_install] Warning: could not run local hook ({e})",
+            file=sys.stderr,
+        )
+        return
+
+    if result.returncode != 0:
+        print(
+            f"[post_install] Warning: local hook exited {result.returncode}",
+            file=sys.stderr,
+        )
+    else:
+        print(f"[post_install] Local hook complete: {hook}", file=sys.stderr)
+
+
 def main():
     """Run all post-install configuration."""
     print("[post_install] Starting post-install configuration...", file=sys.stderr)
@@ -376,6 +437,9 @@ def main():
     setup_tmux_config()
     fix_directory_ownership()
     setup_global_gitignore()
+
+    # Last: run the per-project hook, after base setup is fully in place.
+    run_post_install_hook()
 
     print("[post_install] Configuration complete!", file=sys.stderr)
 
