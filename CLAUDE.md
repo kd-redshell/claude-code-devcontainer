@@ -57,6 +57,7 @@ Runs via `postCreateCommand` after the container starts. Execution order matters
 4. **Tmux config** -- 200k scrollback, mouse support, vi keys.
 5. **Directory ownership** -- fixes mounted volumes that may have root ownership.
 6. **Git config** -- global gitignore, git-delta pager integration.
+7. **Per-project hook** -- if `.devcontainer/post-install.local.{py,sh}` exists, run it. Dispatch by extension (`.py` via `uv run --no-project`, `.sh` via `bash`). Errors are logged but do not fail `postCreateCommand`.
 
 ### install.sh (host-side CLI, `devc` command)
 Bash script providing 16 subcommands for container lifecycle management. Notable behaviors:

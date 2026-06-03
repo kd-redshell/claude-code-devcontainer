@@ -104,6 +104,29 @@ MY_PROJECT_FLAG=1
 
 The file is created empty by `devc template` and sourced into every interactive zsh session via `~/.zshrc`. Changes take effect in the next shell — no `devc rebuild` needed. The file is intended to be `.gitignore`'d since it usually holds secrets; it is not shipped as a template.
 
+### Per-project post-install hook
+
+To run project-specific setup at container creation (install extra Claude plugins, register MCP servers, install project tooling) without forking `post_install.py`, drop a hook script into `.devcontainer/`:
+
+- `.devcontainer/post-install.local.py` — run via `uv run --no-project`, or
+- `.devcontainer/post-install.local.sh` — run via `bash`
+
+The hook runs as the **last** step of `post_install.py`, so `claude` is on PATH, the base plugins are installed, and `~/.claude/` is fully configured. It runs at container creation only (`devc .`, `devc up` first create, `devc rebuild`) — not on `devc shell` or subsequent shell spawns. A non-zero exit logs a warning but does not fail container creation.
+
+Example `.devcontainer/post-install.local.py`:
+
+```python
+#!/usr/bin/env python3
+import subprocess
+
+subprocess.run(["claude", "plugin", "marketplace", "add", "my-org/my-plugins"], check=False)
+subprocess.run(["claude", "mcp", "add", "my-server", "--", "my-mcp-binary"], check=False)
+```
+
+The `.devcontainer/` mount is **read-only**, so the hook can read and execute files there but cannot write back. Persist state elsewhere (`~/.claude/`, `~/.config/`, etc.).
+
+Commit the hook to share team-wide setup, or `.gitignore` it for per-developer / secret setup — your choice. If **both** `.py` and `.sh` are present, the hook is an error and neither runs (a warning is logged).
+
 ## Quick Start
 
 Choose the pattern that fits your workflow:
