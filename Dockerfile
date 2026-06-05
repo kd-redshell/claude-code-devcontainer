@@ -131,3 +131,8 @@ RUN echo 'source ~/.zshrc.custom' >> /home/vscode/.zshrc
 
 # Copy post_install script
 COPY --chown=vscode:vscode post_install.py /opt/post_install.py
+
+# Copy status line script (points settings.json statusLine here; baked into the
+# image rather than ~/.claude so it refreshes on rebuild, not pinned by the volume)
+COPY --chown=vscode:vscode statusline.sh /opt/statusline.sh
+RUN chmod +x /opt/statusline.sh

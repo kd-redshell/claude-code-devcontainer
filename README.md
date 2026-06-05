@@ -139,6 +139,18 @@ The `.devcontainer/` mount is **read-only**, so the hook can read and execute fi
 
 Commit the hook to share team-wide setup, or `.gitignore` it for per-developer / secret setup — your choice. If **both** `.py` and `.sh` are present, the hook is an error and neither runs (a warning is logged).
 
+### Status line
+
+The container ships a custom Claude Code status line that shows, at a glance, **how full the context window is**:
+
+```
+~/myproject  ⎇ main  Opus 4.8  730.0k/1.0M (73%)
+```
+
+It renders the current path (home abbreviated to `~`), the git branch (`⎇ <branch>`, omitted outside a repo, short SHA when detached), the model name, and the tokens used out of the context window size (e.g. `730.0k/1.0M`, which also shows whether you're on the 200k or 1M window) with the percentage in use. The usage figures turn green → yellow (≥70%) → red (≥90%), with a `⚠` marker once usage crosses 200k tokens. It deliberately omits any user/host info.
+
+The script lives in the image at `/opt/statusline.sh` and is wired up by `post_install.py`, which sets `statusLine` in `~/.claude/settings.json` on container creation. Because the script is baked into the image (not the `~/.claude` volume), edits take effect on `devc rebuild`. To use your own status line instead, set `statusLine` in `~/.claude/settings.json` — `post_install.py` only seeds the default when none is configured, so your version is preserved.
+
 ## Quick Start
 
 Choose the pattern that fits your workflow:

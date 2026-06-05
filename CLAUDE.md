@@ -44,7 +44,7 @@ Select a profile with `devc . --target android` or `devc template --target andro
 
 ### Dockerfile (base image, multi-stage build)
 1. **`uv` stage** -- copies the uv binary from Astral's image.
-2. **Final stage** -- Ubuntu 24.04 devcontainer base with system packages, Python 3.13, Node.js (via fnm), and CLI tools. The Claude Code binary is installed via `curl … | bash`, with the symlink dereferenced in-place so the binary survives the `~/.claude/` named volume mount at runtime.
+2. **Final stage** -- Ubuntu 24.04 devcontainer base with system packages, Python 3.13, Node.js (via fnm), and CLI tools. The Claude Code binary is installed via `curl … | bash`, with the symlink dereferenced in-place so the binary survives the `~/.claude/` named volume mount at runtime. `post_install.py` and `statusline.sh` are copied to `/opt/` (outside the volume, so they refresh on rebuild).
 
 ### Dockerfile.android (profile)
 Extends the base image with Android SDK/NDK, emulator system images, JDK 17, appium, mitmproxy, and frida-tools.
@@ -53,7 +53,7 @@ Extends the base image with Android SDK/NDK, emulator system images, JDK 17, app
 Runs via `postCreateCommand` after the container starts. Execution order matters:
 1. **Plugin installation** -- runs first, before auth state exists. Iterates `CLAUDE_PLUGINS` list and calls `claude plugin marketplace add` for each.
 2. **Onboarding bypass** -- seeds `~/.claude.json` with auth state when `CLAUDE_CODE_OAUTH_TOKEN` is set. Workaround for Claude Code issue #8938.
-3. **Claude settings** -- sets `permissions.defaultMode = "bypassPermissions"`.
+3. **Claude settings** -- sets `permissions.defaultMode = "bypassPermissions"`, and seeds `statusLine` to point at `/opt/statusline.sh` (via `setdefault`, so a user-configured status line is preserved).
 4. **Tmux config** -- 200k scrollback, mouse support, vi keys.
 5. **Directory ownership** -- fixes mounted volumes that may have root ownership.
 6. **Git config** -- global gitignore, git-delta pager integration.
