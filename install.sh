@@ -264,6 +264,7 @@ cmd_template() {
   cp "$SCRIPT_DIR/Dockerfile."* "$devcontainer_dir/" 2>/dev/null || true
   cp "$SCRIPT_DIR/devcontainer.json" "$devcontainer_dir/"
   cp "$SCRIPT_DIR/post_install.py" "$devcontainer_dir/"
+  cp "$SCRIPT_DIR/statusline.sh" "$devcontainer_dir/"
   cp "$SCRIPT_DIR/.zshrc" "$devcontainer_dir/"
 
   # Copy env file (preserve user customizations if already present)

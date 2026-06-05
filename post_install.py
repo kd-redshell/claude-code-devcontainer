@@ -181,6 +181,14 @@ def setup_claude_settings():
         settings["permissions"] = {}
     settings["permissions"]["defaultMode"] = "bypassPermissions"
 
+    # Point the status line at the script baked into the image. Use setdefault
+    # so a user who configured their own statusLine (persisted on the ~/.claude
+    # volume) keeps it; we only seed ours when none is set.
+    settings.setdefault(
+        "statusLine",
+        {"type": "command", "command": "/opt/statusline.sh"},
+    )
+
     settings_file.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     print(
         f"[post_install] Claude settings configured: {settings_file}", file=sys.stderr
