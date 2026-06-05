@@ -165,6 +165,7 @@ Each project gets its own container with independent volumes. Best for one-off r
 git clone <untrusted-repo>
 cd untrusted-repo
 devc .          # Installs template + starts container (base profile)
+# Optional: add env vars under .devcontainer (see "Runtime environment variables" under Configuration)
 devc shell      # Opens shell in container
 ```
 
@@ -184,7 +185,9 @@ devc shell      # Opens shell in container
    git clone https://github.com/trailofbits/claude-code-devcontainer .devcontainer/
    ```
 
-3. Open **your project folder** in VS Code, then:
+3. *(Optional)* Add env vars under `.devcontainer/` — see ["Runtime environment variables"](#runtime-environment-variables) under Configuration.
+
+4. Open **your project folder** in VS Code, then:
    - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
    - Type "Reopen in Container" and select **Dev Containers: Reopen in Container**
 
@@ -197,6 +200,7 @@ A parent directory contains the devcontainer config, and you clone multiple repo
 mkdir -p ~/sandbox/client-name
 cd ~/sandbox/client-name
 devc .          # Install template + start container
+# Optional: add env vars under .devcontainer (see "Runtime environment variables" under Configuration)
 devc shell      # Opens shell in container
 
 # Inside container:
