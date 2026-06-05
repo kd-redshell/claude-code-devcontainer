@@ -56,9 +56,15 @@ _fzf_compgen_dir() {
 eval "$(fzf --zsh)"
 
 # Runtime environment variables — edited by the user, not rebuilt.
-# Lives in the read-only .devcontainer bind mount.
-if [[ -f /workspace/.devcontainer/runtime.env ]]; then
-  set -a
-  source /workspace/.devcontainer/runtime.env
-  set +a
-fi
+# Lives in the read-only .devcontainer bind mount. Sources runtime.env first,
+# then every *.env in runtime.env.d/ (alphabetical; later files override earlier
+# ones, and the .d/ files override runtime.env). Drop multiple files into
+# runtime.env.d/ to compose env from several sources, e.g. 00-shared.env
+# (committed) + 90-secrets.env (gitignored). The (N) glob qualifier makes the
+# pattern expand to nothing when the directory is absent or empty.
+for _env_file in \
+  /workspace/.devcontainer/runtime.env \
+  /workspace/.devcontainer/runtime.env.d/*.env(N); do
+  [[ -f "$_env_file" ]] && { set -a; source "$_env_file"; set +a; }
+done
+unset _env_file

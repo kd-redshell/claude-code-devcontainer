@@ -104,6 +104,18 @@ MY_PROJECT_FLAG=1
 
 The file is created empty by `devc template` and sourced into every interactive zsh session via `~/.zshrc`. Changes take effect in the next shell — no `devc rebuild` needed. The file is intended to be `.gitignore`'d since it usually holds secrets; it is not shipped as a template.
 
+#### Composing env from multiple files
+
+To keep env split across several files (e.g. team-shared vs. personal secrets), drop them into `.devcontainer/runtime.env.d/`. Every `*.env` in that directory is sourced after `runtime.env`, in alphabetical order, with later files overriding earlier ones (and the directory's files overriding `runtime.env`):
+
+```
+.devcontainer/runtime.env              # optional base
+.devcontainer/runtime.env.d/00-shared.env    # commit this
+.devcontainer/runtime.env.d/90-secrets.env   # .gitignore this
+```
+
+The directory is optional — if it doesn't exist, only `runtime.env` is sourced. Use a numeric prefix to control precedence. As with `runtime.env`, these are picked up by interactive zsh shells only (not `devc exec` or non-zsh sessions), and take effect in the next shell with no rebuild.
+
 ### Per-project post-install hook
 
 To run project-specific setup at container creation (install extra Claude plugins, register MCP servers, install project tooling) without forking `post_install.py`, drop a hook script into `.devcontainer/`:
