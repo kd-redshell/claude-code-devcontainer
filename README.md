@@ -60,6 +60,65 @@ Verify with `colima status` - should show "macOS Virtualization.Framework" and "
 
 </details>
 
+## Quick Start
+
+Choose the pattern that fits your workflow:
+
+### Pattern A: Per-Project Container (Isolated)
+
+Each project gets its own container with independent volumes. Best for one-off reviews, untrusted repos, or when you need isolation between projects.
+
+**Terminal:**
+
+```bash
+git clone <untrusted-repo>
+cd untrusted-repo
+devc .          # Installs template + starts container (base profile)
+# Optional: add env vars under .devcontainer (see "Runtime environment variables" under Configuration)
+devc shell      # Opens shell in container
+```
+
+**VS Code / Cursor:**
+
+1. Install the Dev Containers extension:
+   - VS Code: `ms-vscode-remote.remote-containers`
+   - Cursor: `anysphere.remote-containers`
+
+2. Set up the devcontainer (choose one):
+
+   ```bash
+   # Option A: Use devc (recommended)
+   devc .
+
+   # Option B: Clone manually
+   git clone https://github.com/trailofbits/claude-code-devcontainer .devcontainer/
+   ```
+
+3. *(Optional)* Add env vars under `.devcontainer/` — see ["Runtime environment variables"](#runtime-environment-variables) under Configuration.
+
+4. Open **your project folder** in VS Code, then:
+   - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+   - Type "Reopen in Container" and select **Dev Containers: Reopen in Container**
+
+### Pattern B: Shared Workspace Container (Grouped)
+
+A parent directory contains the devcontainer config, and you clone multiple repos inside. Shared volumes across all repos. Best for client engagements, related repositories, or ongoing work.
+
+```bash
+# Create workspace for a client engagement
+mkdir -p ~/sandbox/client-name
+cd ~/sandbox/client-name
+devc .          # Install template + start container
+# Optional: add env vars under .devcontainer (see "Runtime environment variables" under Configuration)
+devc shell      # Opens shell in container
+
+# Inside container:
+git clone <client-repo-1>
+git clone <client-repo-2>
+cd client-repo-1
+claude          # Ready to work
+```
+
 ## Build Profiles
 
 Two build profiles are available:
@@ -150,65 +209,6 @@ The container ships a custom Claude Code status line that shows, at a glance, **
 It renders the current path (home abbreviated to `~`), the git branch (`⎇ <branch>`, omitted outside a repo, short SHA when detached), the model name, and the tokens used out of the context window size (e.g. `730.0k/1.0M`, which also shows whether you're on the 200k or 1M window) with the percentage in use. The usage figures turn green → yellow (≥70%) → red (≥90%), with a `⚠` marker once usage crosses 200k tokens. It deliberately omits any user/host info.
 
 The script lives in the image at `/opt/statusline.sh` and is wired up by `post_install.py`, which sets `statusLine` in `~/.claude/settings.json` on container creation. Because the script is baked into the image (not the `~/.claude` volume), edits take effect on `devc rebuild`. To use your own status line instead, set `statusLine` in `~/.claude/settings.json` — `post_install.py` only seeds the default when none is configured, so your version is preserved.
-
-## Quick Start
-
-Choose the pattern that fits your workflow:
-
-### Pattern A: Per-Project Container (Isolated)
-
-Each project gets its own container with independent volumes. Best for one-off reviews, untrusted repos, or when you need isolation between projects.
-
-**Terminal:**
-
-```bash
-git clone <untrusted-repo>
-cd untrusted-repo
-devc .          # Installs template + starts container (base profile)
-# Optional: add env vars under .devcontainer (see "Runtime environment variables" under Configuration)
-devc shell      # Opens shell in container
-```
-
-**VS Code / Cursor:**
-
-1. Install the Dev Containers extension:
-   - VS Code: `ms-vscode-remote.remote-containers`
-   - Cursor: `anysphere.remote-containers`
-
-2. Set up the devcontainer (choose one):
-
-   ```bash
-   # Option A: Use devc (recommended)
-   devc .
-
-   # Option B: Clone manually
-   git clone https://github.com/trailofbits/claude-code-devcontainer .devcontainer/
-   ```
-
-3. *(Optional)* Add env vars under `.devcontainer/` — see ["Runtime environment variables"](#runtime-environment-variables) under Configuration.
-
-4. Open **your project folder** in VS Code, then:
-   - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
-   - Type "Reopen in Container" and select **Dev Containers: Reopen in Container**
-
-### Pattern B: Shared Workspace Container (Grouped)
-
-A parent directory contains the devcontainer config, and you clone multiple repos inside. Shared volumes across all repos. Best for client engagements, related repositories, or ongoing work.
-
-```bash
-# Create workspace for a client engagement
-mkdir -p ~/sandbox/client-name
-cd ~/sandbox/client-name
-devc .          # Install template + start container
-# Optional: add env vars under .devcontainer (see "Runtime environment variables" under Configuration)
-devc shell      # Opens shell in container
-
-# Inside container:
-git clone <client-repo-1>
-git clone <client-repo-2>
-cd client-repo-1
-claude          # Ready to work
-```
 
 ## Token-Based Auth (Headless)
 
