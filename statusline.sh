@@ -21,6 +21,7 @@ input="$(cat)"
 
 model="$(jq -r '.model.display_name // "claude"' <<<"$input" 2>/dev/null)"
 cwd="$(jq -r '.workspace.current_dir // .cwd // empty' <<<"$input" 2>/dev/null)"
+project_dir="$(jq -r '.workspace.project_dir // empty' <<<"$input" 2>/dev/null)"
 pct="$(jq -r '.context_window.used_percentage // 0' <<<"$input" 2>/dev/null)"
 size="$(jq -r '.context_window.context_window_size // 0' <<<"$input" 2>/dev/null)"
 exceeds="$(jq -r '.exceeds_200k_tokens // false' <<<"$input" 2>/dev/null)"
@@ -48,10 +49,29 @@ if [ -n "$cwd" ]; then
             || GIT_OPTIONAL_LOCKS=0 git -C "$cwd" rev-parse --short HEAD 2>/dev/null || true)"
 fi
 
-# Abbreviate the home prefix in the displayed path (guarded for set -u when
-# HOME is unset). NB: escape the ~ replacement, else bash tilde-expands it.
+# Compose the path segment. When cwd has drifted inside project_dir (e.g.
+# the agent ran `cd subdir`), show "<project-basename> › <relative>" so the
+# session root stays anchored and the drift is visible at a glance. Once the
+# composed segment exceeds MAX_PATH_LEN characters, collapse the relative
+# half to "…/<leaf>" so the rest of the bar stays readable. When the cwd
+# has not drifted or has left the project tree, show the abbreviated cwd.
+# NB: escape the ~ replacement, else bash tilde-expands it.
+MAX_PATH_LEN=60
 home="${HOME:-}"
-[ -n "$cwd" ] && [ -n "$home" ] && cwd="${cwd/#$home/\~}"
+abbrev() { local p="$1"; [ -n "$home" ] && p="${p/#$home/\~}"; printf '%s' "$p"; }
+path_display=""
+if [ -n "$cwd" ]; then
+  if [ -n "$project_dir" ] && [ "$cwd" != "$project_dir" ] && [ "${cwd#$project_dir/}" != "$cwd" ]; then
+    relative="${cwd#$project_dir/}"
+    root_base="$(basename "$project_dir")"
+    path_display="${root_base} › ${relative}"
+    if [ "${#path_display}" -gt "$MAX_PATH_LEN" ] && [[ "$relative" == */* ]]; then
+      path_display="${root_base} › …/$(basename "$relative")"
+    fi
+  else
+    path_display="$(abbrev "$cwd")"
+  fi
+fi
 
 # Normalize numeric inputs.
 pct="${pct%.*}"; [[ "$pct" =~ ^[0-9]+$ ]] || pct=0; [ "$pct" -gt 100 ] && pct=100
@@ -74,7 +94,7 @@ cyan=$'\033[36m'
 magenta=$'\033[35m'
 
 line=""
-[ -n "$cwd" ]    && line+="${cyan}${cwd}${reset}  "
+[ -n "$path_display" ] && line+="${cyan}${path_display}${reset}  "
 [ -n "$branch" ] && line+="${magenta}⎇ ${branch}${reset}  "
 line+="${dim}${model}${reset}"
 
