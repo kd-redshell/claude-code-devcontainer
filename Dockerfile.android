@@ -21,6 +21,8 @@ USER root
 # ── System packages for Android Java + NDK development ──────────────
 # Packages already in the base image (build-essential, git, curl, unzip)
 # are not repeated here.
+# `universe` is already enabled on the base image; this re-enables it
+# defensively in case the base ever ships without it.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends software-properties-common \
  && add-apt-repository universe \
@@ -41,6 +43,10 @@ RUN apt-get update \
     lib32stdc++6 \
     libncurses6 \
     libgl1-mesa-dev \
+    # Software GLES/EGL + Mesa software rasterizer for headless GL rendering
+    libegl1 \
+    libgles2 \
+    libgl1-mesa-dri \
     # Emulator dependencies
     libpulse0 \
     libxcomposite1 \
@@ -87,13 +93,9 @@ RUN bash -c 'yes 2>/dev/null | sdkmanager --licenses > /dev/null 2>&1 || true' \
 RUN sdkmanager "ndk;${ANDROID_NDK}" \
  && rm -rf /tmp/* /var/tmp/*
 
-RUN sdkmanager "emulator" \
- && rm -rf /tmp/* /var/tmp/*
-
-RUN ARCH=$(dpkg --print-architecture) \
- && if [ "$ARCH" = "arm64" ]; then SYS_ARCH="arm64-v8a"; else SYS_ARCH="x86_64"; fi \
- && sdkmanager "system-images;android-${ANDROID_API};google_apis;${SYS_ARCH}" \
- && rm -rf /tmp/* /var/tmp/*
+# No local `emulator` package or `system-images` here: emulation runs in a
+# remote MCP server. This container only interfaces with Android targets
+# (remote-emulated or physical) via adb/appium/mitmproxy/frida, and builds.
 
 # ── User-level tools ────────────────────────────────────────────────
 USER vscode
